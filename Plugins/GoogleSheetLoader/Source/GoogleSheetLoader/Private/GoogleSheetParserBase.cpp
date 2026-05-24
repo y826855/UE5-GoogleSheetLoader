@@ -2,6 +2,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Dom/JsonObject.h"
+#include "Misc/ScopedSlowTask.h"
 
 
 // GoogleSheetParserBase.cpp
@@ -56,7 +57,10 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
     {
         FString Label;
         Col->AsObject()->TryGetStringField(TEXT("label"), Label);
-        Headers.Add(Label.IsEmpty() ? TEXT("Unknown") : Label);
+
+        // 공백으로 인한 매핑 오류 방지를 위해 Trim 추가
+        FString CleanLabel = Label.TrimStartAndEnd();
+        Headers.Add(CleanLabel.IsEmpty() ? TEXT("Unknown") : CleanLabel);
     }
 
     // ── Step 4. table.rows → 데이터 추출 ──────────
@@ -69,8 +73,21 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
 
     UE_LOG(LogTemp, Log, TEXT("[GoogleSheet] 데이터 행 추출 시작 (총 %d 행)"), Rows->Num());
     
-    for (const TSharedPtr<FJsonValue>& RowVal : *Rows)
+    // 프로그래스 바 설정
+    FScopedSlowTask ParseProgress(static_cast<float>(Rows->Num()), FText::FromString(TEXT("Parsing Google Sheet Data...")));
+    ParseProgress.MakeDialog(true); // 취소 버튼이 보이도록 설정
+
+    for (int32 i = 0; i < Rows->Num(); ++i)
     {
+        // 사용자가 취소를 눌렀는지 확인
+        if (ParseProgress.ShouldCancel())
+        {
+            break;
+        }
+
+        const TSharedPtr<FJsonValue>& RowVal = (*Rows)[i];
+        ParseProgress.EnterProgressFrame(1.f, FText::Format(FText::FromString(TEXT("Parsing Row {0} of {1}")), FText::AsNumber(i + 1), FText::AsNumber(Rows->Num())));
+
         const TArray<TSharedPtr<FJsonValue>>* Cells;
         if (!RowVal->AsObject()->TryGetArrayField(TEXT("c"), Cells)) continue;
 
@@ -130,9 +147,13 @@ bool UGoogleSheetParserBase::GetRowAt(
 template<typename TEnum>
 TEnum UGoogleSheetParserBase::GetEnumValueFromString(const FString& EnumName, const FString& StringValue)
 {
-    const UEnum* EnumPtr = FindObject<UEnum>(nullptr, *EnumName, EFindObjectFlags::ExactClass);
+    // FindObject는 충분히 빠르지만, 빈번한 호출이 예상되면 멤버 변수 TMap<FString, UEnum*>에 캐싱하는 것이 좋습니다.
+    UEnum* EnumPtr = FindObject<UEnum>(nullptr, *EnumName, true);
+    
     if (!EnumPtr) return TEnum(0);
-    return static_cast<TEnum>(EnumPtr->GetValueByName(FName(*StringValue)));
+    
+    int64 Value = EnumPtr->GetValueByName(FName(*StringValue));
+    return (Value == INDEX_NONE) ? TEnum(0) : static_cast<TEnum>(Value);
 }
 
 FColor UGoogleSheetParserBase::ParseToColor(const FString& ColorString)

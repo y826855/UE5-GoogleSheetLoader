@@ -18,7 +18,8 @@ public:
 		const FString& PackagePath,
 		UClass* AssetClass,
 		IAssetTools& AssetTools,
-		IPlatformFile& PlatformFile);
+		IPlatformFile& PlatformFile,
+		TSet<FString>& OutCreatedPaths);
 	
 	/** * [일괄 생성] 파싱된 행 데이터를 받아 TMap으로 묶어서 반환함 
 	 * @param ParsedRows: 부모로부터 받은 2차원 배열 데이터

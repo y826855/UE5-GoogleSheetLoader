@@ -43,6 +43,10 @@ public:
 	UPROPERTY(EditAnywhere, Instanced, Category="Google Sheet|Config")
 	UGoogleSheetParserBase* DataParser;
 
+	// 파싱 완료 후 생성된 에셋들을 즉시 저장할지 여부
+	UPROPERTY(EditAnywhere, Category="Google Sheet|Config")
+	bool bAutoSaveOnComplete = false;
+
 	// ── 상태 (에디터 전용, 저장 안 함) ────────────
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(VisibleAnywhere, Transient, Category="Google Sheet|Status")

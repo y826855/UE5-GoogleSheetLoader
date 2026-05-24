@@ -2,6 +2,7 @@
 
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
+#include "Misc/ScopedSlowTask.h"
 
 /**
  * [일괄 생성 및 로드]
@@ -21,9 +22,20 @@ TMap<int32, UPrimaryDataAsset*> AssetGenerationHelper::GenerateAssetMap(
     // 루프 안에서 매번 LoadModuleChecked를 하지 않도록 여기서 한 번만 가져옵니다.
     IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
     IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    TSet<FString> CreatedPaths;
+
+    FScopedSlowTask Progress(static_cast<float>(ParsedRows.Num()), FText::FromString(TEXT("Generating Data Assets...")));
+    Progress.MakeDialog(true); // 취소 가능하도록 설정
 
     for (const TArray<FString>& Row : ParsedRows)
     {
+        if (Progress.ShouldCancel())
+        {
+            break;
+        }
+
+        Progress.EnterProgressFrame(1.f);
+
         if (Row.Num() < 1) continue;
         
         int32 ID = FCString::Atoi(*Row[0]);
@@ -33,7 +45,7 @@ TMap<int32, UPrimaryDataAsset*> AssetGenerationHelper::GenerateAssetMap(
         FString PackagePath = FPaths::Combine(*FolderPath, *FString::Format(*NameFormat, { ID }));
         
         // --- [최적화 포인트 2] 내부 전용 함수에 캐싱된 도구 전달 ---
-        UPrimaryDataAsset* Asset = GetOrCreateAssetInternal(PackagePath, AssetClass, AssetTools, PlatformFile);
+        UPrimaryDataAsset* Asset = GetOrCreateAssetInternal(PackagePath, AssetClass, AssetTools, PlatformFile, CreatedPaths);
         
         if (Asset)
         {
@@ -53,7 +65,8 @@ UPrimaryDataAsset* AssetGenerationHelper::GetOrCreateAssetInternal(
     const FString& PackagePath,
     UClass* AssetClass,
     IAssetTools& AssetTools,
-    IPlatformFile& PlatformFile)
+    IPlatformFile& PlatformFile,
+    TSet<FString>& OutCreatedPaths)
 {
     // 1. 이미 존재하는지 먼저 확인 (메모리에 있거나 로드 가능하면 가져옴)
     UPrimaryDataAsset* TargetAsset = Cast<UPrimaryDataAsset>(StaticLoadObject(AssetClass, nullptr, *PackagePath));
@@ -65,9 +78,10 @@ UPrimaryDataAsset* AssetGenerationHelper::GetOrCreateAssetInternal(
         FString LongPackagePath = FPackageName::GetLongPackagePath(PackagePath);
         FString PhysPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() + LongPackagePath.RightChop(6));
 
-        if (!PlatformFile.DirectoryExists(*PhysPath))
+        if (!OutCreatedPaths.Contains(PhysPath) && !PlatformFile.DirectoryExists(*PhysPath))
         {
             PlatformFile.CreateDirectoryTree(*PhysPath);
+            OutCreatedPaths.Add(PhysPath);
         }
 
         // 에셋 생성
@@ -94,4 +108,3 @@ UPrimaryDataAsset* AssetGenerationHelper::GetOrCreateAssetInternal(
 
     return TargetAsset;
 }
-

@@ -5,6 +5,7 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Misc/DateTime.h"
+#include "FileHelpers.h"
 
 FString UGoogleSheetConfig::GetSpreadsheetID() const
 {
@@ -88,6 +89,12 @@ void UGoogleSheetConfig::Fetch()
             //파싱 클래스 실행
             FString temp;
             DataParser->Parse(RawContent, temp);
+
+            // 자동 저장 옵션이 켜져 있다면 Dirty 상태인 패키지들 저장
+            if (bAutoSaveOnComplete)
+            {
+                FEditorFileUtils::SaveDirtyPackages(true, true, true);
+            }
 
             FetchStatus = EFetchStatus::Success;
             LastMessage = FString::Printf(
