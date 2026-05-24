@@ -43,6 +43,11 @@ public class GoogleSheetLoader : ModuleRules
 				"Json",
 				"JsonUtilities",
 				"PropertyEditor",
+				"UnrealEd",
+				"ToolMenus",
+				"LevelEditor",
+				"WorkspaceMenuStructure",
+				"InputCore",
 			}
 			);
 		
