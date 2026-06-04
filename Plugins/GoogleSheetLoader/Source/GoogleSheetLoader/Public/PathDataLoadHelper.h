@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Misc/PackageName.h"
 #include "PathDataLoadHelper.generated.h"
 
 UCLASS()
@@ -11,6 +12,13 @@ class GOOGLESHEETLOADER_API UPathDataLoadHelper : public UBlueprintFunctionLibra
     GENERATED_BODY()
 
 public:
+
+    static bool IsUnsetPathValue(const FString& Value)
+    {
+        const FString TrimmedValue = Value.TrimStartAndEnd();
+        return TrimmedValue.IsEmpty()
+            || TrimmedValue.Equals(TEXT("None"), ESearchCase::IgnoreCase);
+    }
 
     // 1. 경로 생성
     static FString MakeAssetReferencePath(const FString& FolderPath, const FString& AssetName);
@@ -39,10 +47,22 @@ public:
         const FString& NameFormat,
         UClass* SpecificClass = nullptr)
     {
+        if (IsUnsetPathValue(FolderPath) || IsUnsetPathValue(NameFormat))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Asset path settings are empty. FolderPath: '%s', NameFormat: '%s'"), *FolderPath, *NameFormat);
+            return nullptr;
+        }
+
         UClass* ClassToUse = SpecificClass ? SpecificClass : T::StaticClass();
     
         FString PackagePath = MakePackagePath(FolderPath, NameFormat);
         FString AssetReferencePath = MakeAssetReferencePath(FolderPath, NameFormat);
+
+        if (!FPackageName::IsValidLongPackageName(PackagePath))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Invalid package path: %s"), *PackagePath);
+            return nullptr;
+        }
 
         // [로드 시도] - 객체 경로 사용
         T* Loaded = Cast<T>(StaticLoadObject(ClassToUse, nullptr, *AssetReferencePath));

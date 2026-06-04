@@ -7,50 +7,89 @@
 #include "Misc/DateTime.h"
 #include "FileHelpers.h"
 
+namespace
+{
+    bool IsUnsetConfigValue(const FString& Value)
+    {
+        const FString TrimmedValue = Value.TrimStartAndEnd();
+        return TrimmedValue.IsEmpty()
+            || TrimmedValue.Equals(TEXT("None"), ESearchCase::IgnoreCase);
+    }
+}
+
 FString UGoogleSheetConfig::GetSpreadsheetID() const
 {
-    // URL 형태면 ID만 추출: /spreadsheets/d/{ID}/
-    if (SheetURL.Contains(TEXT("docs.google.com")))
+    const FString TrimmedSheetURL = SheetURL.TrimStartAndEnd();
+    if (IsUnsetConfigValue(TrimmedSheetURL))
+    {
+        return FString();
+    }
+
+    if (TrimmedSheetURL.Contains(TEXT("docs.google.com")))
     {
         FString Left, Right;
-        if (SheetURL.Split(TEXT("/d/"), &Left, &Right))
+        if (TrimmedSheetURL.Split(TEXT("/d/"), &Left, &Right))
         {
             FString ID;
             Right.Split(TEXT("/"), &ID, &Left);
-            return ID;
+            return ID.TrimStartAndEnd();
         }
     }
-    // 아니면 그냥 ID로 취급
-    return SheetURL;
+
+    return TrimmedSheetURL;
 }
 
 FString UGoogleSheetConfig::GetRangeString() const
 {
-    // PageName!RangeFrom:RangeTo 형태
-    return FString::Printf(TEXT("%s!%s:%s"),
-        *PageName, *RangeFrom, *RangeTo);
+    return FString::Printf(
+        TEXT("%s!%s:%s"),
+        *PageName.TrimStartAndEnd(),
+        *RangeFrom.TrimStartAndEnd(),
+        *RangeTo.TrimStartAndEnd());
 }
 
 void UGoogleSheetConfig::Fetch()
 {
-    const FString ID    = GetSpreadsheetID();
-    const FString Range = GetRangeString();
+    const FString ID = GetSpreadsheetID();
+    const FString TrimmedPageName = PageName.TrimStartAndEnd();
+    const FString TrimmedRangeFrom = RangeFrom.TrimStartAndEnd();
+    const FString TrimmedRangeTo = RangeTo.TrimStartAndEnd();
 
-    if (ID.IsEmpty() || PageName.IsEmpty())
+    if (IsUnsetConfigValue(ID))
     {
-        FetchStatus  = EFetchStatus::Failed;
-        LastMessage  = TEXT("SheetURL Or PageName is Empty.");
+        FetchStatus = EFetchStatus::Failed;
+        LastMessage = TEXT("SheetURL is empty.");
+        return;
+    }
+
+    if (IsUnsetConfigValue(TrimmedPageName))
+    {
+        FetchStatus = EFetchStatus::Failed;
+        LastMessage = TEXT("PageName is empty.");
+        return;
+    }
+
+    if (IsUnsetConfigValue(TrimmedRangeFrom) || IsUnsetConfigValue(TrimmedRangeTo))
+    {
+        FetchStatus = EFetchStatus::Failed;
+        LastMessage = TEXT("RangeFrom or RangeTo is empty.");
+        return;
+    }
+
+    if (!IsValid(DataParser))
+    {
+        FetchStatus = EFetchStatus::Failed;
+        LastMessage = TEXT("DataParser is empty.");
         return;
     }
 
     FetchStatus = EFetchStatus::Loading;
     LastMessage = TEXT("Request...");
 
-    // 공개 시트 Json으로 받아옴
     const FString URL = FString::Printf(
         TEXT("https://docs.google.com/spreadsheets/d/%s/gviz/tq?sheet=%s&range=%s:%s"),
-        *ID, *PageName, *RangeFrom, *RangeTo);
-    
+        *ID, *TrimmedPageName, *TrimmedRangeFrom, *TrimmedRangeTo);
+
     TSharedRef<IHttpRequest> Req = FHttpModule::Get().CreateRequest();
     Req->SetURL(URL);
     Req->SetVerb(TEXT("GET"));
@@ -77,20 +116,40 @@ void UGoogleSheetConfig::Fetch()
             }
 
             FString RawContent = Response->GetContentAsString();
-            // "/*O_o*/" 라는 글자가 있으면 그 앞부분은 다 버린다!
+            if (RawContent.TrimStartAndEnd().IsEmpty())
+            {
+                FetchStatus = EFetchStatus::Failed;
+                LastMessage = TEXT("Response is empty.");
+                return;
+            }
+
             if (RawContent.Contains(TEXT("/*O_o*/")))
             {
                 TArray<FString> SplitByMagic;
                 RawContent.ParseIntoArray(SplitByMagic, TEXT("/*O_o*/"), true);
                 if (SplitByMagic.Num() > 0)
+                {
                     RawContent = SplitByMagic.Last().TrimStartAndEnd();
+                }
             }
 
-            //파싱 클래스 실행
-            FString temp;
-            DataParser->Parse(RawContent, temp);
+            if (!IsValid(DataParser))
+            {
+                FetchStatus = EFetchStatus::Failed;
+                LastMessage = TEXT("DataParser is empty.");
+                return;
+            }
 
-            // 자동 저장 옵션이 켜져 있다면 Dirty 상태인 패키지들 저장
+            FString ParseMessage;
+            if (!DataParser->Parse(RawContent, ParseMessage))
+            {
+                FetchStatus = EFetchStatus::Failed;
+                LastMessage = ParseMessage.IsEmpty()
+                    ? TEXT("Parse failed.")
+                    : ParseMessage;
+                return;
+            }
+
             if (bAutoSaveOnComplete)
             {
                 FEditorFileUtils::SaveDirtyPackages(true, true, true);
@@ -98,7 +157,7 @@ void UGoogleSheetConfig::Fetch()
 
             FetchStatus = EFetchStatus::Success;
             LastMessage = FString::Printf(
-                TEXT("Success — %d bytes Receive"), Response->GetContent().Num());
+                TEXT("Success - %d bytes received"), Response->GetContent().Num());
         });
 
     Req->ProcessRequest();

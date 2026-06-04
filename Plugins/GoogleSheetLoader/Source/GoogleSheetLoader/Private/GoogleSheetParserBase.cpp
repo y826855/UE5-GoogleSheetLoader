@@ -12,6 +12,12 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
     Headers.Empty();
     bIsParsed = false;
 
+    if (RawResponse.TrimStartAndEnd().IsEmpty())
+    {
+        OutResult = TEXT("Raw response is empty.");
+        return false;
+    }
+
     // ── Step 1. 래퍼 제거 ──────────────────────────
     // "google.visualization.Query.setResponse(" ... ");"
     FString JsonStr = RawResponse;
@@ -55,12 +61,31 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
 
     for (const TSharedPtr<FJsonValue>& Col : *Cols)
     {
+        if (!Col.IsValid() || Col->IsNull())
+        {
+            Headers.Add(TEXT("Unknown"));
+            continue;
+        }
+
+        const TSharedPtr<FJsonObject> ColObj = Col->AsObject();
+        if (!ColObj.IsValid())
+        {
+            Headers.Add(TEXT("Unknown"));
+            continue;
+        }
+
         FString Label;
-        Col->AsObject()->TryGetStringField(TEXT("label"), Label);
+        ColObj->TryGetStringField(TEXT("label"), Label);
 
         // 공백으로 인한 매핑 오류 방지를 위해 Trim 추가
         FString CleanLabel = Label.TrimStartAndEnd();
         Headers.Add(CleanLabel.IsEmpty() ? TEXT("Unknown") : CleanLabel);
+    }
+
+    if (Headers.IsEmpty())
+    {
+        OutResult = TEXT("No columns found.");
+        return false;
     }
 
     // ── Step 4. table.rows → 데이터 추출 ──────────
@@ -88,8 +113,19 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
         const TSharedPtr<FJsonValue>& RowVal = (*Rows)[i];
         ParseProgress.EnterProgressFrame(1.f, FText::Format(FText::FromString(TEXT("Parsing Row {0} of {1}")), FText::AsNumber(i + 1), FText::AsNumber(Rows->Num())));
 
+        if (!RowVal.IsValid() || RowVal->IsNull())
+        {
+            continue;
+        }
+
+        const TSharedPtr<FJsonObject> RowObj = RowVal->AsObject();
+        if (!RowObj.IsValid())
+        {
+            continue;
+        }
+
         const TArray<TSharedPtr<FJsonValue>>* Cells;
-        if (!RowVal->AsObject()->TryGetArrayField(TEXT("c"), Cells)) continue;
+        if (!RowObj->TryGetArrayField(TEXT("c"), Cells)) continue;
 
         TMap<FString, FString> Row;
         for (int32 j = 0; j < Headers.Num(); j++)
@@ -102,6 +138,11 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
             }
 
             const TSharedPtr<FJsonObject> Cell = (*Cells)[j]->AsObject();
+            if (!Cell.IsValid())
+            {
+                Row.Add(Headers[j], TEXT(""));
+                continue;
+            }
 
             // "f" (formatted) 값 우선, 없으면 "v" (raw value)
             FString Value;

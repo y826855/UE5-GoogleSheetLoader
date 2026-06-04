@@ -17,4 +17,6 @@ class TESTGOOGLESHEET_API UItemDataAsset : public UPrimaryDataAsset
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSoftObjectPtr<UPaperSprite> Icon;
+
+	//무거운 에셋들 저장해두자
 };
