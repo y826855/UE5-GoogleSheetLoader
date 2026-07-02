@@ -171,7 +171,16 @@ bool UGoogleSheetParserBase::Parse(const FString& RawResponse, FString& OutResul
 
     OutResult = FString::Printf(
         TEXT("파싱 완료 — %d 행, %d 컬럼"), ParsedRows.Num(), Headers.Num());
+    
+    ClearParsedData();
+    
     return true;
+}
+
+void UGoogleSheetParserBase::ClearParsedData()
+{
+    ParsedRows.Empty();
+    Headers.Empty();
 }
 
 // ── 검색 구현 ───────────────────────────────────

@@ -33,6 +33,7 @@ protected:
     // 자식 클래스에서 행 처리 커스텀 가능
     virtual void OnRowParsed(const TMap<FString, FString>& Row) {}
     virtual void OnParseComplete() {}
+    void ClearParsedData();
     
     // 파싱 완료된 데이터
     TArray<TMap<FString, FString>> ParsedRows;
