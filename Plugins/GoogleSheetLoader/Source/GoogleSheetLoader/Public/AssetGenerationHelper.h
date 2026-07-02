@@ -1,9 +1,9 @@
 ﻿#pragma once
 
+#include "CoreMinimal.h"
+
 #if WITH_EDITOR
-
 #include "IAssetTools.h"
-
 #endif
 
 

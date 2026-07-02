@@ -7,7 +7,7 @@
 class UGoogleSheetConfig;
 
 /** 대시보드 리스트에 표시될 항목 데이터 */
-typedef TSharedPtr<UGoogleSheetConfig*> FGoogleSheetConfigPtr;
+using FGoogleSheetConfigWeakPtr = TWeakObjectPtr<UGoogleSheetConfig>;
 
 class GOOGLESHEETLOADER_API SGoogleSheetDashboard : public SCompoundWidget
 {
@@ -21,9 +21,9 @@ public:
 	void RefreshList();
 
 private:
-	TSharedRef<ITableRow> OnGenerateRow(UGoogleSheetConfig* Item, const TSharedRef<STableViewBase>& OwnerTable);
+	TSharedRef<ITableRow> OnGenerateRow(FGoogleSheetConfigWeakPtr Item, const TSharedRef<STableViewBase>& OwnerTable);
 	FReply OnFetchAllClicked();
 
-	TArray<UGoogleSheetConfig*> ConfigList;
-	TSharedPtr<SListView<UGoogleSheetConfig*>> ListView;
+	TArray<FGoogleSheetConfigWeakPtr> ConfigList;
+	TSharedPtr<SListView<FGoogleSheetConfigWeakPtr>> ListView;
 };

@@ -42,7 +42,7 @@ void SGoogleSheetDashboard::Construct(const FArguments& InArgs)
 		// 중앙 리스트 뷰
 		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(5)
 		[
-			SAssignNew(ListView, SListView<UGoogleSheetConfig*>)
+			SAssignNew(ListView, SListView<FGoogleSheetConfigWeakPtr>)
 			.ItemHeight(32.f)
 			.ListItemsSource(&ConfigList)
 			.OnGenerateRow(this, &SGoogleSheetDashboard::OnGenerateRow)
@@ -64,7 +64,10 @@ void SGoogleSheetDashboard::RefreshList()
 	{
 		if (UGoogleSheetConfig* Config = Cast<UGoogleSheetConfig>(AssetData.GetAsset()))
 		{
-			ConfigList.Add(Config);
+			if (IsValid(Config))
+			{
+				ConfigList.Add(Config);
+			}
 		}
 	}
 
@@ -74,16 +77,25 @@ void SGoogleSheetDashboard::RefreshList()
 	}
 }
 
-TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(UGoogleSheetConfig* Item, const TSharedRef<STableViewBase>& OwnerTable)
+TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(FGoogleSheetConfigWeakPtr Item, const TSharedRef<STableViewBase>& OwnerTable)
 {
-	return SNew(STableRow<UGoogleSheetConfig*>, OwnerTable)
+	return SNew(STableRow<FGoogleSheetConfigWeakPtr>, OwnerTable)
 	[
 		SNew(SHorizontalBox)
 		
 		// 에셋 이름 및 아이콘
 		+ SHorizontalBox::Slot().FillWidth(0.3f).VAlign(VAlign_Center).Padding(5, 0)
 		[
-			SNew(STextBlock).Text(FText::FromString(Item->GetName())).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+			SNew(STextBlock)
+			.Text_Lambda([Item]() {
+				if (const UGoogleSheetConfig* Config = Item.Get())
+				{
+					return FText::FromString(Config->GetName());
+				}
+
+				return FText::FromString(TEXT("(Invalid Config)"));
+			})
+			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 		]
 
 		// 상태 표시
@@ -91,7 +103,13 @@ TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(UGoogleSheetConfig* I
 		[
 			SNew(STextBlock)
 			.Text_Lambda([Item]() {
-				switch (Item->FetchStatus) {
+				const UGoogleSheetConfig* Config = Item.Get();
+				if (!Config)
+				{
+					return FText::FromString(TEXT("⬜"));
+				}
+
+				switch (Config->FetchStatus) {
 					case EFetchStatus::Success: return FText::FromString(TEXT("✅"));
 					case EFetchStatus::Failed:  return FText::FromString(TEXT("❌"));
 					case EFetchStatus::Loading: return FText::FromString(TEXT("⏳"));
@@ -104,7 +122,14 @@ TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(UGoogleSheetConfig* I
 		+ SHorizontalBox::Slot().FillWidth(0.4f).VAlign(VAlign_Center)
 		[
 			SNew(STextBlock)
-			.Text_Lambda([Item]() { return FText::FromString(Item->LastMessage); })
+			.Text_Lambda([Item]() {
+				if (const UGoogleSheetConfig* Config = Item.Get())
+				{
+					return FText::FromString(Config->LastMessage);
+				}
+
+				return FText::GetEmpty();
+			})
 			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 		]
 
@@ -114,7 +139,10 @@ TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(UGoogleSheetConfig* I
 			SNew(SButton)
 			.Text(FText::FromString(TEXT("Update")))
 			.OnClicked_Lambda([Item]() {
-				if (Item) Item->Fetch();
+				if (UGoogleSheetConfig* Config = Item.Get())
+				{
+					Config->Fetch();
+				}
 				return FReply::Handled();
 			})
 		]
@@ -125,7 +153,13 @@ TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(UGoogleSheetConfig* I
 			.Text(FText::FromString(TEXT("Find")))
 			.OnClicked_Lambda([Item]() {
 				// 타입을 명시하여 모호성 해결
-				if (Item) GEditor->SyncBrowserToObjects(TArray<UObject*>{ Item });
+				if (UGoogleSheetConfig* Config = Item.Get())
+				{
+					if (GEditor)
+					{
+						GEditor->SyncBrowserToObjects(TArray<UObject*>{ Config });
+					}
+				}
 				return FReply::Handled();
 			})
 		]
@@ -134,9 +168,23 @@ TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(UGoogleSheetConfig* I
 
 FReply SGoogleSheetDashboard::OnFetchAllClicked()
 {
-	for (UGoogleSheetConfig* Config : ConfigList)
+	ConfigList.RemoveAll([](const FGoogleSheetConfigWeakPtr& ConfigPtr)
 	{
-		if (Config) Config->Fetch();
+		return !ConfigPtr.IsValid();
+	});
+
+	for (const FGoogleSheetConfigWeakPtr& ConfigPtr : ConfigList)
+	{
+		if (UGoogleSheetConfig* Config = ConfigPtr.Get())
+		{
+			Config->Fetch();
+		}
 	}
+
+	if (ListView.IsValid())
+	{
+		ListView->RequestListRefresh();
+	}
+
 	return FReply::Handled();
 }
