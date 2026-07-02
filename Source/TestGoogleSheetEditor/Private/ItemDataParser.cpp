@@ -16,6 +16,12 @@ namespace
 	}
 }
 
+UItemDataParser::UItemDataParser()
+{
+	SpriteFolderPath.Path = TEXT("/Game/Icons");
+	AssetFolderPath.Path = TEXT("/Game/Items/DataAssets");
+}
+
 void UItemDataParser::OnParseComplete()
 {
 	UE_LOG(LogTemp, Log, TEXT("get row: %d"), GetRowCount());
@@ -38,7 +44,7 @@ void UItemDataParser::OnParseComplete()
 				continue;
 			}
 
-			if (IsUnsetConfigValue(AssetFolderPath) || IsUnsetConfigValue(AssetNameFormat))
+			if (IsUnsetConfigValue(AssetFolderPath.Path) || IsUnsetConfigValue(AssetNameFormat))
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Skip row %d because asset path settings are empty."), i);
 				continue;
@@ -46,7 +52,7 @@ void UItemDataParser::OnParseComplete()
 
 			const FString DataAssetFileName = FString::Format(*AssetNameFormat, {ID}); 
 			UItemDataAsset* DataAsset = UPathDataLoadHelper::GetOrCreateAsset
-				<UItemDataAsset>(AssetFolderPath, DataAssetFileName);
+				<UItemDataAsset>(AssetFolderPath.Path, DataAssetFileName);
 			
 			FItemDataStructure NewRow;
 			NewRow.ItemID = FName(ID);
@@ -67,14 +73,14 @@ UItemDataAsset* UItemDataParser::SetupItemAsset(UItemDataAsset* ItemAsset, FStri
 {
 	if (ItemAsset == nullptr) return nullptr;
 
-	if (IsUnsetConfigValue(ID) || IsUnsetConfigValue(SpriteFolderPath) || IsUnsetConfigValue(SpriteFileFormat))
+	if (IsUnsetConfigValue(ID) || IsUnsetConfigValue(SpriteFolderPath.Path) || IsUnsetConfigValue(SpriteFileFormat))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Skip icon setup because sprite settings are empty."));
 		return ItemAsset;
 	}
 	
 	auto iconFileName = FString::Format(*SpriteFileFormat, { ID.TrimStartAndEnd() });
-	auto iconPath = UPathDataLoadHelper::MakeAssetReferencePath(SpriteFolderPath, iconFileName);
+	auto iconPath = UPathDataLoadHelper::MakeAssetReferencePath(SpriteFolderPath.Path, iconFileName);
 	
 	ItemAsset->Icon = UPathDataLoadHelper::LoadResource<UPaperSprite>(iconPath);
 

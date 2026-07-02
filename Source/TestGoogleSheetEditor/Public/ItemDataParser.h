@@ -15,6 +15,7 @@ class TESTGOOGLESHEETEDITOR_API UItemDataParser : public UGoogleSheetParserBase
 {
 	GENERATED_BODY()
 public:
+	UItemDataParser();
 	virtual void OnParseComplete() override;
 	
 protected:
@@ -23,15 +24,15 @@ protected:
 	UDataTable* TargetTable;
 
 	/** 스프라이트 리소스가 위치한 폴더 경로 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
-	FString SpriteFolderPath = TEXT("/Game/Icons/");
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config", meta = (ContentDir))
+	FDirectoryPath SpriteFolderPath;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
 	FString SpriteFileFormat = TEXT("Item_Icon");
 	
 	/** 데이터 에셋 로드 경로 설정 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config|Path")
-	FString AssetFolderPath = TEXT("/Game/Items/DataAssets/");
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config|Path", meta = (ContentDir))
+	FDirectoryPath AssetFolderPath;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config|Path")
 	FString AssetNameFormat = TEXT("DA_Item_{0}");
