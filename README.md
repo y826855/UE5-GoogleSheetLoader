@@ -4,7 +4,7 @@ GoogleSheetLoader는 공개 Google Sheet 데이터를 Unreal Engine 에디터에
 
 반복적으로 CSV를 내려받고 복사하는 흐름 대신, `GoogleSheetConfig` 데이터 에셋에 시트 정보와 파서 클래스를 설정한 뒤 Details 패널이나 대시보드에서 한 번에 갱신할 수 있습니다.
 
-🔗 Google Drive
+🔗 Download PlugIn 
 
 https://drive.google.com/file/d/1sxaSIg_KuBwB-Wp79QnpMcbRVnsNjyCf/view?usp=sharing
 
