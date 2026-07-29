@@ -15,6 +15,7 @@ public class GoogleSheetLoader : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"AssetRegistry",
+				"UnrealEd",
 			}
 			);
 
@@ -27,7 +28,6 @@ public class GoogleSheetLoader : ModuleRules
 				"HTTP",
 				"Json",
 				"PropertyEditor",
-				"UnrealEd",
 				"ToolMenus",
 				"WorkspaceMenuStructure",
 			}

@@ -3,15 +3,33 @@
 
 #include "ItemDataParser.h"
 
-#include "PathDataLoadHelper.h"
-#include "SheetDataTableUtils.h"
-#include "SheetParserUtils.h"
-#include "SheetValidation.h"
+#include "Parser/SheetDataTableUtils.h"
+#include "Parser/SheetParserUtils.h"
+#include "Parser/SheetValidation.h"
 #include "TestGoogleSheet/Data/ItemDataStructure.h"
 
 using namespace SheetDataTableUtils;
 using namespace SheetParserUtils;
 using namespace SheetValidation;
+
+static constexpr const TCHAR* ParserName = TEXT("ItemData");
+
+// 시트 컬럼 정의
+namespace SheetColumns
+{
+	const FString ID = TEXT("ID");
+	const FString DisplayName = TEXT("DisplayName");
+	const FString Description = TEXT("Description");
+	const FString MaxStack = TEXT("MaxStack");
+
+	const TArray<FString> RequiredHeaders =
+	{
+		ID,
+		DisplayName,
+		Description,
+		MaxStack
+	};
+}
 
 UItemDataParser::UItemDataParser()
 {
@@ -21,220 +39,105 @@ UItemDataParser::UItemDataParser()
 
 bool UItemDataParser::OnParseComplete(FString& OutError)
 {
-	constexpr const TCHAR* ParserName = TEXT("ItemData");
 	FParseReport Report;
 	OutError.Reset();
 	LogHeaders(ParserName, GetHeaders());
 
-	if (!ValidateTargetTable(TargetTable, FItemDataStructure::StaticStruct()))
+	// 파서 설정 검증
+	if (!ValidateParserSetup(Report, OutError))
 	{
-		LogTargetTableError(
-			ParserName,
-			TargetTable,
-			FItemDataStructure::StaticStruct());
-		OutError = TEXT("대상 DataTable 또는 RowStruct가 올바르지 않습니다.");
 		return false;
 	}
 
-	if (!ValidateRequiredHeaders(
-		GetHeaders(),
-		{
-			TEXT("ID"),
-			TEXT("DisplayName"),
-			TEXT("Description"),
-			TEXT("MaxStack"),
-			TEXT("테스트")
-		},
-		&Report))
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT("[Sheet][%s] Required headers are missing."),
-			ParserName);
-		OutError = TEXT("필수 헤더가 없습니다.");
-		return false;
-	}
-
-	if (IsUnsetValue(AssetFolderPath.Path)
-		|| IsUnsetValue(AssetNameFormat))
-	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT("[Sheet][%s] Asset path settings are empty."),
-			ParserName);
-		OutError = TEXT("에셋 경로 설정이 비어 있습니다.");
-		return false;
-	}
-
+	// DataTable 변경 Scope
 	FScopedDataTableEditNotification TableEdit(TargetTable);
-	if (!TableEdit.IsActive())
-	{
-		OutError = TEXT("DataTable 편집을 시작하지 못했습니다.");
-		return false;
-	}
 
-	for (int32 i = 0; i < GetRowCount(); ++i)
+	for (int32 Index = 0; Index < GetRowCount(); ++Index)
 	{
 		TMap<FString, FString> RowData;
-		if (!GetRowAt(i, RowData))
+		if (!GetRowAt(Index, RowData))
 		{
 			continue;
 		}
 
-		FString ID;
-		if (!GetRequiredCell(
-			RowData,
-			TEXT("ID"),
-			ID,
-			&Report,
-			i))
+		// 행 데이터 변환
+		FSheetRowReader Row(RowData, Index, Report);
+		FItemDataStructure NewRow;
+		NewRow.ItemID = Row.GetRequiredName(SheetColumns::ID);
+		NewRow.DisplayName = Row.Get(SheetColumns::DisplayName);
+		NewRow.Description = Row.Get(SheetColumns::Description);
+		NewRow.MaxStack = Row.GetRequiredInt(SheetColumns::MaxStack);
+
+		if (!Row.IsValid())
 		{
 			continue;
 		}
 
-		const auto ParseRequiredIntCell =
-			[&RowData, &Report, i](
-				const FString& ColumnName,
-				const FName RowName,
-				int32& OutValue)
-			{
-				FString SourceValue;
-				if (!GetRequiredCell(
-					RowData,
-					ColumnName,
-					SourceValue,
-					&Report,
-					i,
-					RowName))
-				{
-					return false;
-				}
-
-				if (LexTryParseString(OutValue, *SourceValue))
-				{
-					return true;
-				}
-
-				Report.AddIssue(
-					EParseIssueSeverity::Error,
-					TEXT("정수로 변환할 수 없습니다."),
-					i,
-					RowName,
-					ColumnName,
-					SourceValue);
-				return false;
-			};
-
-		const FName RowName = ParseNameValue(ID);
-		if (RowName.IsNone())
-		{
-			Report.AddIssue(
-				EParseIssueSeverity::Error,
-				TEXT("ID could not be converted to a row name."),
-				i,
-				NAME_None,
-				TEXT("ID"),
-				ID);
-			continue;
-		}
-
-		int32 MaxStack = 0;
-		int32 TestValue = 0;
-		if (!ParseRequiredIntCell(TEXT("MaxStack"), RowName, MaxStack)
-			|| !ParseRequiredIntCell(TEXT("테스트"), RowName, TestValue))
-		{
-			continue;
-		}
-
+		// DataAsset 생성
 		UItemDataAsset* DataAsset = GetOrCreateDataAsset<UItemDataAsset>(
 			AssetFolderPath.Path,
 			AssetNameFormat,
-			RowName);
-
-		FItemDataStructure NewRow;
-		NewRow.ItemID = RowName;
-		NewRow.DisplayName = GetCellOrDefault(RowData, TEXT("DisplayName"));
-		NewRow.Description = GetCellOrDefault(RowData, TEXT("Description"));
-		NewRow.MaxStack = MaxStack;
-		NewRow.ItemDataAsset = SetupItemAsset(DataAsset, ID);
-
-		UE_LOG(
-			LogTemp,
-			Verbose,
-			TEXT("[Sheet][%s] 테스트 값: %d"),
-			ParserName,
-			TestValue);
+			NewRow.ItemID);
+		NewRow.ItemDataAsset = SetupItemAsset(
+			DataAsset,
+			Row);
 
 		TargetTable->AddRow(NewRow.ItemID, NewRow);
-		++Report.SuccessCount;
+		Report.AddSuccess();
 	}
 
-	for (const FParseIssue& Issue : Report.Issues)
-	{
-		if (Issue.Severity == EParseIssueSeverity::Error)
-		{
-			UE_LOG(
-				LogTemp,
-				Error,
-				TEXT("[Sheet][%s] Row=%d Column=%s Value='%s' %s"),
-				ParserName,
-				Issue.RowIndex,
-				*Issue.ColumnName,
-				*Issue.SourceValue,
-				*Issue.Message);
-		}
-		else
-		{
-			UE_LOG(
-				LogTemp,
-				Warning,
-				TEXT("[Sheet][%s] Row=%d Column=%s Value='%s' %s"),
-				ParserName,
-				Issue.RowIndex,
-				*Issue.ColumnName,
-				*Issue.SourceValue,
-				*Issue.Message);
-		}
-	}
+	return FinalizeParseReport(ParserName, Report, OutError);
+}
 
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT("[Sheet][%s] Success=%d Warning=%d Error=%d"),
+bool UItemDataParser::ValidateParserSetup(
+	FParseReport& Report,
+	FString& OutError) const
+{
+	// DataTable 검증
+	if (!ValidateTargetTable(
 		ParserName,
-		Report.SuccessCount,
-		Report.WarningCount,
-		Report.ErrorCount);
-
-	if (Report.HasErrors())
+		TargetTable,
+		FItemDataStructure::StaticStruct(),
+		OutError))
 	{
-		OutError = FString::Printf(
-			TEXT("%d개 행 처리 오류가 발생했습니다."),
-			Report.ErrorCount);
 		return false;
 	}
 
-	return true;
+	// 필수 헤더 검증
+	if (!ValidateRequiredHeaders(
+		GetHeaders(),
+		SheetColumns::RequiredHeaders,
+		&Report))
+	{
+		return FinalizeParseReport(ParserName, Report, OutError);
+	}
+
+	// 필수 경로 검증
+	return ValidateRequiredSettings(
+		ParserName,
+		{
+			{ TEXT("AssetFolderPath"), AssetFolderPath.Path },
+			{ TEXT("AssetNameFormat"), AssetNameFormat }
+		},
+		OutError);
 }
 
-UItemDataAsset* UItemDataParser::SetupItemAsset(UItemDataAsset* ItemAsset, FString ID)
+UItemDataAsset* UItemDataParser::SetupItemAsset(
+	UItemDataAsset* ItemAsset,
+	FSheetRowReader& Row)
 {
-	if (ItemAsset == nullptr) return nullptr;
-
-	if (IsUnsetValue(ID)
-		|| IsUnsetValue(SpriteFolderPath.Path)
-		|| IsUnsetValue(SpriteFileFormat))
+	// DataAsset 검증
+	if (!ItemAsset)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Skip icon setup because sprite settings are empty."));
-		return ItemAsset;
+		return nullptr;
 	}
-	
-	auto iconFileName = FString::Format(*SpriteFileFormat, { ID.TrimStartAndEnd() });
-	auto iconPath = UPathDataLoadHelper::MakeAssetReferencePath(SpriteFolderPath.Path, iconFileName);
-	
-	ItemAsset->Icon = UPathDataLoadHelper::LoadResource<UPaperSprite>(iconPath);
+
+	// 아이콘 설정
+	Row.AssignOptionalAsset(
+		ItemAsset->Icon,
+		SpriteFolderPath.Path,
+		SpriteFileFormat,
+		TEXT("Icon"));
 
 	return ItemAsset;
 }

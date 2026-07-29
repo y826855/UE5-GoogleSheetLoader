@@ -4,34 +4,38 @@
 #include "DataTableEditorUtils.h"
 #include "Engine/DataTable.h"
 
+// Editor 모듈의 시트 파서에서 공통으로 사용하는 DataTable 유틸입니다.
 namespace SheetDataTableUtils
 {
-	// DataTable이 예상 RowStruct를 사용하는지 확인합니다.
+	// DataTable과 RowStruct를 확인하고 실패 사유를 반환합니다.
 	inline bool ValidateTargetTable(
-		const UDataTable* TargetTable,
-		const UScriptStruct* ExpectedRowStruct)
-	{
-		return IsValid(TargetTable)
-			&& IsValid(ExpectedRowStruct)
-			&& TargetTable->GetRowStruct() == ExpectedRowStruct;
-	}
-
-	// 잘못 지정된 DataTable 정보를 로그로 출력합니다.
-	inline void LogTargetTableError(
 		const TCHAR* ParserName,
 		const UDataTable* TargetTable,
-		const UScriptStruct* ExpectedRowStruct)
+		const UScriptStruct* ExpectedRowStruct,
+		FString& OutError)
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT("[Sheet][%s] Invalid table. Table=%s ExpectedRow=%s ActualRow=%s"),
-			ParserName,
+		if (IsValid(TargetTable)
+			&& IsValid(ExpectedRowStruct)
+			&& TargetTable->GetRowStruct() == ExpectedRowStruct)
+		{
+			OutError.Reset();
+			return true;
+		}
+
+		OutError = FString::Printf(
+			TEXT("잘못된 DataTable입니다. Table=%s ExpectedRow=%s ActualRow=%s"),
 			*GetNameSafe(TargetTable),
 			*GetNameSafe(ExpectedRowStruct),
 			TargetTable
 				? *GetNameSafe(TargetTable->GetRowStruct())
 				: TEXT("None"));
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[Sheet][%s] %s"),
+			ParserName,
+			*OutError);
+		return false;
 	}
 
 	// 파서가 받은 헤더를 로그로 출력합니다.
@@ -85,11 +89,6 @@ namespace SheetDataTableUtils
 				TargetTable,
 				FDataTableEditorUtils::EDataTableChangeInfo::RowList);
 			(void)TargetTable->MarkPackageDirty();
-		}
-
-		bool IsActive() const
-		{
-			return ::IsValid(TargetTable);
 		}
 
 		FScopedDataTableEditNotification(

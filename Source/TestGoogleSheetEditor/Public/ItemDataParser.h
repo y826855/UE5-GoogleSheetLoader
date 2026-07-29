@@ -7,6 +7,12 @@
 #include "TestGoogleSheet/Data/ItemDataAsset.h"
 #include "ItemDataParser.generated.h"
 
+namespace SheetValidation
+{
+	struct FParseReport;
+	class FSheetRowReader;
+}
+
 /**
  * 
  */
@@ -38,5 +44,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config|Path")
 	FString AssetNameFormat = TEXT("DA_Item_{0}");
 	
-	UItemDataAsset* SetupItemAsset(UItemDataAsset* ItemAsset, FString ID);
+private:
+	// 파서 설정 검증
+	bool ValidateParserSetup(
+		SheetValidation::FParseReport& Report,
+		FString& OutError) const;
+
+	// Item DataAsset 설정
+	UItemDataAsset* SetupItemAsset(
+		UItemDataAsset* ItemAsset,
+		SheetValidation::FSheetRowReader& Row);
 };

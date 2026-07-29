@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "PathDataLoadHelper.h"
 
+// Editor 모듈의 시트 파서에서 공통으로 사용하는 변환 및 에셋 유틸입니다.
 namespace SheetParserUtils
 {
 	// 셀 앞뒤의 공백을 제거합니다.
