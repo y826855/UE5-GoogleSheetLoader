@@ -4,17 +4,14 @@
 #include "ItemDataParser.h"
 
 #include "PathDataLoadHelper.h"
+#include "SheetDataTableUtils.h"
+#include "SheetParserUtils.h"
+#include "SheetValidation.h"
 #include "TestGoogleSheet/Data/ItemDataStructure.h"
 
-namespace
-{
-	bool IsUnsetConfigValue(const FString& Value)
-	{
-		const FString TrimmedValue = Value.TrimStartAndEnd();
-		return TrimmedValue.IsEmpty()
-			|| TrimmedValue.Equals(TEXT("None"), ESearchCase::IgnoreCase);
-	}
-}
+using namespace SheetDataTableUtils;
+using namespace SheetParserUtils;
+using namespace SheetValidation;
 
 UItemDataParser::UItemDataParser()
 {
@@ -22,58 +19,213 @@ UItemDataParser::UItemDataParser()
 	AssetFolderPath.Path = TEXT("/Game/Items/DataAssets");
 }
 
-void UItemDataParser::OnParseComplete()
+bool UItemDataParser::OnParseComplete(FString& OutError)
 {
-	UE_LOG(LogTemp, Log, TEXT("get row: %d"), GetRowCount());
+	constexpr const TCHAR* ParserName = TEXT("ItemData");
+	FParseReport Report;
+	OutError.Reset();
+	LogHeaders(ParserName, GetHeaders());
 
-	if (!IsValid(TargetTable))
+	if (!ValidateTargetTable(TargetTable, FItemDataStructure::StaticStruct()))
 	{
-		UE_LOG(LogTemp, Error, TEXT("TargetTable is empty. Parsed rows will not be applied."));
-		return;
+		LogTargetTableError(
+			ParserName,
+			TargetTable,
+			FItemDataStructure::StaticStruct());
+		OutError = TEXT("대상 DataTable 또는 RowStruct가 올바르지 않습니다.");
+		return false;
 	}
-	
+
+	if (!ValidateRequiredHeaders(
+		GetHeaders(),
+		{
+			TEXT("ID"),
+			TEXT("DisplayName"),
+			TEXT("Description"),
+			TEXT("MaxStack"),
+			TEXT("테스트")
+		},
+		&Report))
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[Sheet][%s] Required headers are missing."),
+			ParserName);
+		OutError = TEXT("필수 헤더가 없습니다.");
+		return false;
+	}
+
+	if (IsUnsetValue(AssetFolderPath.Path)
+		|| IsUnsetValue(AssetNameFormat))
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[Sheet][%s] Asset path settings are empty."),
+			ParserName);
+		OutError = TEXT("에셋 경로 설정이 비어 있습니다.");
+		return false;
+	}
+
+	FScopedDataTableEditNotification TableEdit(TargetTable);
+	if (!TableEdit.IsActive())
+	{
+		OutError = TEXT("DataTable 편집을 시작하지 못했습니다.");
+		return false;
+	}
+
 	for (int32 i = 0; i < GetRowCount(); ++i)
 	{
 		TMap<FString, FString> RowData;
-		if (GetRowAt(i, RowData))
+		if (!GetRowAt(i, RowData))
 		{
-			const FString ID = RowData.FindRef(TEXT("ID")).TrimStartAndEnd();
-			if (IsUnsetConfigValue(ID))
+			continue;
+		}
+
+		FString ID;
+		if (!GetRequiredCell(
+			RowData,
+			TEXT("ID"),
+			ID,
+			&Report,
+			i))
+		{
+			continue;
+		}
+
+		const auto ParseRequiredIntCell =
+			[&RowData, &Report, i](
+				const FString& ColumnName,
+				const FName RowName,
+				int32& OutValue)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Skip row %d because ID is empty."), i);
-				continue;
-			}
+				FString SourceValue;
+				if (!GetRequiredCell(
+					RowData,
+					ColumnName,
+					SourceValue,
+					&Report,
+					i,
+					RowName))
+				{
+					return false;
+				}
 
-			if (IsUnsetConfigValue(AssetFolderPath.Path) || IsUnsetConfigValue(AssetNameFormat))
-			{
-				UE_LOG(LogTemp, Warning, TEXT("Skip row %d because asset path settings are empty."), i);
-				continue;
-			}
+				if (LexTryParseString(OutValue, *SourceValue))
+				{
+					return true;
+				}
 
-			const FString DataAssetFileName = FString::Format(*AssetNameFormat, {ID}); 
-			UItemDataAsset* DataAsset = UPathDataLoadHelper::GetOrCreateAsset
-				<UItemDataAsset>(AssetFolderPath.Path, DataAssetFileName);
-			
-			FItemDataStructure NewRow;
-			NewRow.ItemID = FName(ID);
-			NewRow.DisplayName = RowData.FindRef(TEXT("DisplayName"));
-			NewRow.Description  =  RowData.FindRef(TEXT("Description"));
-			//NewRow.MaxStack  = //파싱  RowData.FindRef(TEXT("MaxStack"));
-			NewRow.ItemDataAsset = SetupItemAsset(DataAsset, ID);
-            
-			UE_LOG(LogTemp, Log, TEXT("이름: %s 설명: %s")
-				, *NewRow.DisplayName, *NewRow.Description);
+				Report.AddIssue(
+					EParseIssueSeverity::Error,
+					TEXT("정수로 변환할 수 없습니다."),
+					i,
+					RowName,
+					ColumnName,
+					SourceValue);
+				return false;
+			};
 
-			TargetTable->AddRow(NewRow.ItemID, NewRow);
+		const FName RowName = ParseNameValue(ID);
+		if (RowName.IsNone())
+		{
+			Report.AddIssue(
+				EParseIssueSeverity::Error,
+				TEXT("ID could not be converted to a row name."),
+				i,
+				NAME_None,
+				TEXT("ID"),
+				ID);
+			continue;
+		}
+
+		int32 MaxStack = 0;
+		int32 TestValue = 0;
+		if (!ParseRequiredIntCell(TEXT("MaxStack"), RowName, MaxStack)
+			|| !ParseRequiredIntCell(TEXT("테스트"), RowName, TestValue))
+		{
+			continue;
+		}
+
+		UItemDataAsset* DataAsset = GetOrCreateDataAsset<UItemDataAsset>(
+			AssetFolderPath.Path,
+			AssetNameFormat,
+			RowName);
+
+		FItemDataStructure NewRow;
+		NewRow.ItemID = RowName;
+		NewRow.DisplayName = GetCellOrDefault(RowData, TEXT("DisplayName"));
+		NewRow.Description = GetCellOrDefault(RowData, TEXT("Description"));
+		NewRow.MaxStack = MaxStack;
+		NewRow.ItemDataAsset = SetupItemAsset(DataAsset, ID);
+
+		UE_LOG(
+			LogTemp,
+			Verbose,
+			TEXT("[Sheet][%s] 테스트 값: %d"),
+			ParserName,
+			TestValue);
+
+		TargetTable->AddRow(NewRow.ItemID, NewRow);
+		++Report.SuccessCount;
+	}
+
+	for (const FParseIssue& Issue : Report.Issues)
+	{
+		if (Issue.Severity == EParseIssueSeverity::Error)
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[Sheet][%s] Row=%d Column=%s Value='%s' %s"),
+				ParserName,
+				Issue.RowIndex,
+				*Issue.ColumnName,
+				*Issue.SourceValue,
+				*Issue.Message);
+		}
+		else
+		{
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("[Sheet][%s] Row=%d Column=%s Value='%s' %s"),
+				ParserName,
+				Issue.RowIndex,
+				*Issue.ColumnName,
+				*Issue.SourceValue,
+				*Issue.Message);
 		}
 	}
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("[Sheet][%s] Success=%d Warning=%d Error=%d"),
+		ParserName,
+		Report.SuccessCount,
+		Report.WarningCount,
+		Report.ErrorCount);
+
+	if (Report.HasErrors())
+	{
+		OutError = FString::Printf(
+			TEXT("%d개 행 처리 오류가 발생했습니다."),
+			Report.ErrorCount);
+		return false;
+	}
+
+	return true;
 }
 
 UItemDataAsset* UItemDataParser::SetupItemAsset(UItemDataAsset* ItemAsset, FString ID)
 {
 	if (ItemAsset == nullptr) return nullptr;
 
-	if (IsUnsetConfigValue(ID) || IsUnsetConfigValue(SpriteFolderPath.Path) || IsUnsetConfigValue(SpriteFileFormat))
+	if (IsUnsetValue(ID)
+		|| IsUnsetValue(SpriteFolderPath.Path)
+		|| IsUnsetValue(SpriteFileFormat))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Skip icon setup because sprite settings are empty."));
 		return ItemAsset;

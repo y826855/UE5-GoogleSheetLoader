@@ -16,9 +16,10 @@ class TESTGOOGLESHEETEDITOR_API UItemDataParser : public UGoogleSheetParserBase
 	GENERATED_BODY()
 public:
 	UItemDataParser();
-	virtual void OnParseComplete() override;
 	
 protected:
+	virtual bool OnParseComplete(FString& OutError) override;
+
 	/** 작업 대상이 될 데이터 테이블 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
 	UDataTable* TargetTable;
@@ -28,7 +29,7 @@ protected:
 	FDirectoryPath SpriteFolderPath;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
-	FString SpriteFileFormat = TEXT("Item_Icon");
+	FString SpriteFileFormat = TEXT("Item_Icon_{0}");
 	
 	/** 데이터 에셋 로드 경로 설정 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config|Path", meta = (ContentDir))

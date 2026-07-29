@@ -9,7 +9,7 @@ class UGoogleSheetConfig;
 /** 대시보드 리스트에 표시될 항목 데이터 */
 using FGoogleSheetConfigWeakPtr = TWeakObjectPtr<UGoogleSheetConfig>;
 
-class GOOGLESHEETLOADER_API SGoogleSheetDashboard : public SCompoundWidget
+class SGoogleSheetDashboard : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SGoogleSheetDashboard) {}

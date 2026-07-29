@@ -4,8 +4,6 @@
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/Layout/SBox.h"
-#include "EditorStyleSet.h"
 
 void SGoogleSheetDashboard::Construct(const FArguments& InArgs)
 {
@@ -21,7 +19,17 @@ void SGoogleSheetDashboard::Construct(const FArguments& InArgs)
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot().AutoWidth()
 			[
-				SNew(SButton)
+			SNew(SButton)
+				.IsEnabled_Lambda([this]()
+				{
+					return !ConfigList.ContainsByPredicate(
+						[](const FGoogleSheetConfigWeakPtr& ConfigPtr)
+						{
+							const UGoogleSheetConfig* Config = ConfigPtr.Get();
+							return Config
+								&& Config->FetchStatus == EFetchStatus::Loading;
+						});
+				})
 				.OnClicked(this, &SGoogleSheetDashboard::OnFetchAllClicked)
 				.ContentPadding(FMargin(10, 5))
 				[
@@ -43,7 +51,6 @@ void SGoogleSheetDashboard::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(5)
 		[
 			SAssignNew(ListView, SListView<FGoogleSheetConfigWeakPtr>)
-			.ItemHeight(32.f)
 			.ListItemsSource(&ConfigList)
 			.OnGenerateRow(this, &SGoogleSheetDashboard::OnGenerateRow)
 		]
@@ -137,6 +144,12 @@ TSharedRef<ITableRow> SGoogleSheetDashboard::OnGenerateRow(FGoogleSheetConfigWea
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(5, 0)
 		[
 			SNew(SButton)
+			.IsEnabled_Lambda([this, Item]()
+			{
+				const UGoogleSheetConfig* Config = Item.Get();
+				return Config
+					&& Config->FetchStatus != EFetchStatus::Loading;
+			})
 			.Text(FText::FromString(TEXT("Update")))
 			.OnClicked_Lambda([Item]() {
 				if (UGoogleSheetConfig* Config = Item.Get())
@@ -177,7 +190,10 @@ FReply SGoogleSheetDashboard::OnFetchAllClicked()
 	{
 		if (UGoogleSheetConfig* Config = ConfigPtr.Get())
 		{
-			Config->Fetch();
+			if (Config->FetchStatus != EFetchStatus::Loading)
+			{
+				Config->Fetch();
+			}
 		}
 	}
 

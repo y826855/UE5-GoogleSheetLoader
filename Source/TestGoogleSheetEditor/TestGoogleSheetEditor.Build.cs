@@ -21,8 +21,7 @@ public class TestGoogleSheetEditor : ModuleRules
             {
                 "CoreUObject",
                 "Engine",
-                "Slate",
-                "SlateCore",
+                "UnrealEd",
             }
         );
     }

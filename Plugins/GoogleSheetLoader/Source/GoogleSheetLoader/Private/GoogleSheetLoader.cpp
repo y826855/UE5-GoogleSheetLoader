@@ -3,10 +3,9 @@
 #include "GoogleSheetLoader.h"
 
 #include "GoogleSheetConfig.h"
-#include "GoogleSheetConfigCustomization.h"
-#include "SGoogleSheetDashboard.h"
+#include "Config/GoogleSheetConfigCustomization.h"
+#include "Dashboard/SGoogleSheetDashboard.h"
 #include "ToolMenus.h"
-#include "LevelEditor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "WorkspaceMenuStructure.h"
 #include "WorkspaceMenuStructureModule.h"
@@ -32,14 +31,15 @@ void FGoogleSheetLoaderModule::StartupModule()
 
 	if (GIsEditor && !IsRunningCommandlet())
 	{
-		// 2. 대시보드 탭 등록 (메뉴 그룹 지정 포함)
-		FGlobalTabmanager::Get()->RegisterNomadTabSpawner(GoogleSheetDashboardTabName,
-			FOnSpawnTab::CreateRaw(this, &FGoogleSheetLoaderModule::OnSpawnPluginTab))
+		FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+			GoogleSheetDashboardTabName,
+			FOnSpawnTab::CreateRaw(
+				this,
+				&FGoogleSheetLoaderModule::OnSpawnDashboardTab))
 			.SetDisplayName(LOCTEXT("FGoogleSheetDashboardTabTitle", "Google Sheet Dashboard"))
 			.SetMenuType(ETabSpawnerMenuType::Enabled)
 			.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory());
 
-		// 3. 툴바 및 메뉴 확장 등록
 		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FGoogleSheetLoaderModule::RegisterMenus));
 	}
 }
@@ -62,7 +62,8 @@ void FGoogleSheetLoaderModule::ShutdownModule()
 	}
 }
 
-TSharedRef<SDockTab> FGoogleSheetLoaderModule::OnSpawnPluginTab(const FSpawnTabArgs& SpawnTabArgs)
+TSharedRef<SDockTab> FGoogleSheetLoaderModule::OnSpawnDashboardTab(
+	const FSpawnTabArgs& SpawnTabArgs)
 {
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
@@ -85,11 +86,30 @@ void FGoogleSheetLoaderModule::RegisterMenus()
 			"OpenGoogleSheetDashboard",
 			FUIAction(FExecuteAction::CreateRaw(this, &FGoogleSheetLoaderModule::OnOpenDashboard)),
 			LOCTEXT("DashboardLabel", "Sheet Loader"),
-			LOCTEXT("DashboardTooltip", "Open Google Sheet Management Dashboard"),
+			LOCTEXT("DashboardTooltip", "Open the Google Sheet dashboard"),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "EditorViewport.RelativeTransformMode")
 		);
 		
 		Section.AddEntry(Entry);
+	}
+
+	UToolMenu* ToolsMenu =
+		UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools");
+	if (ToolsMenu)
+	{
+		FToolMenuSection& Section =
+			ToolsMenu->FindOrAddSection("GoogleSheetLoader");
+
+		Section.AddEntry(FToolMenuEntry::InitMenuEntry(
+			"OpenGoogleSheetDashboardFromTools",
+			LOCTEXT("DashboardMenuLabel", "Google Sheet Dashboard"),
+			LOCTEXT("DashboardMenuTooltip", "Open the Google Sheet dashboard"),
+			FSlateIcon(
+				FAppStyle::GetAppStyleSetName(),
+				"EditorViewport.RelativeTransformMode"),
+			FUIAction(FExecuteAction::CreateRaw(
+				this,
+				&FGoogleSheetLoaderModule::OnOpenDashboard))));
 	}
 }
 

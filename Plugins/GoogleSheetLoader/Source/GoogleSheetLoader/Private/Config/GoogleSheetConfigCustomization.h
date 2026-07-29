@@ -1,4 +1,3 @@
-// Private/GoogleSheetSingleConfigCustomization.h
 #pragma once
 
 #include "IDetailCustomization.h"

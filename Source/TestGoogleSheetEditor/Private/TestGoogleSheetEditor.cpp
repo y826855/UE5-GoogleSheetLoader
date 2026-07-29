@@ -1,17 +1,7 @@
-﻿#include "TestGoogleSheetEditor.h"
+#include "Modules/ModuleManager.h"
 
-#define LOCTEXT_NAMESPACE "FTestGoogleSheetEditorModule"
-
-void FTestGoogleSheetEditorModule::StartupModule()
+class FTestGoogleSheetEditorModule : public IModuleInterface
 {
-    
-}
+};
 
-void FTestGoogleSheetEditorModule::ShutdownModule()
-{
-    
-}
-
-#undef LOCTEXT_NAMESPACE
-    
 IMPLEMENT_MODULE(FTestGoogleSheetEditorModule, TestGoogleSheetEditor)

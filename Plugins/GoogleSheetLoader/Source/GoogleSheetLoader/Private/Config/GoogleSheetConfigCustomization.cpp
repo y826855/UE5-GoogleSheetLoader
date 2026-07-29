@@ -6,8 +6,6 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
-#include "Widgets/Images/SImage.h"
-#include "Styling/AppStyle.h"
 
 TSharedRef<IDetailCustomization> FGoogleSheetConfigCustomization::MakeInstance()
 {
@@ -58,6 +56,28 @@ void FGoogleSheetConfigCustomization::CustomizeDetails(
                         // 너무 길면 앞 8자만
                         return FText::FromString(
                             ID.Len() > 8 ? ID.Left(8) + TEXT("...") : ID);
+                    })
+                ]
+            ]
+
+            // URL에서 자동으로 찾은 시트 탭 ID
+            + SVerticalBox::Slot().AutoHeight().Padding(0, 2)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().AutoWidth().Padding(0,0,6,0)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString("Sheet GID"))
+                    .ColorAndOpacity(FSlateColor::UseSubduedForeground())
+                ]
+                + SHorizontalBox::Slot()
+                [
+                    SNew(STextBlock)
+                    .Text_Lambda([this]()
+                    {
+                        return Config.IsValid()
+                            ? FText::FromString(Config->GetSheetGid())
+                            : FText::GetEmpty();
                     })
                 ]
             ]
