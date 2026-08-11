@@ -12,7 +12,7 @@ Google Sheet의 데이터를 Unreal Engine `DataTable`로 가져오는 에디터
 
 ## 빠른 시작
 
-1. [플러그인을 다운로드](https://drive.google.com/file/d/1SXiTgJ47cHo2U0NcwFjOQn4DH5ZT1chQ/view?usp=sharing)하여 프로젝트의 `Plugins/GoogleSheetLoader`에 배치합니다.
+1. [플러그인을 다운로드](https://drive.google.com/file/d/1d0FCVk4rXKJ08e6issxmvQ8V_Ai6E59F/view?usp=sharing)하여 프로젝트의 `Plugins/GoogleSheetLoader`에 배치합니다.
 2. Google Sheet를 링크로 접근할 수 있게 설정하고, 가져올 탭을 연 상태에서 전체 URL을 복사합니다.
 3. 시트 Header와 대응하는 `FTableRowBase` 구조체 및 DataTable을 만듭니다.
 4. 프로젝트에 **Editor 타입 모듈**을 만들고, 그 안에 `UGoogleSheetParserBase`를 상속한 Parser를 작성합니다.
