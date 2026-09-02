@@ -6,7 +6,7 @@ Google Sheet의 데이터를 Unreal Engine `DataTable`로 가져오는 에디터
 > [!IMPORTANT]
 > 이 플러그인은 다음 세 가지 규칙을 기준으로 사용합니다.
 >
-> 1. **시트 하나당 DataTable 하나**를 연결합니다.
+> 1. **시트 하나당 DataTable 하나**를 연결하며 시트가 viewer 형태로 모두에게 공유되어 있어야 합니다.
 > 2. 지정한 범위의 **첫 번째 행을 Header**로 사용합니다.
 > 3. Parser는 반드시 **`Type: Editor`로 등록된 Editor Module**에 작성합니다. Runtime Module에 작성하지 않습니다.
 
